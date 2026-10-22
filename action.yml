@@ -1,0 +1,86 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: action
+name: ADP Jira add comment
+description: Adds an Atlassian Document Format comment to a Jira Cloud issue
+
+inputs:
+  jira-url:
+    description: Jira Cloud base URL, for example https://adp-uat.atlassian.net
+    required: true
+  jira-email:
+    description: Atlassian account email associated with the API token
+    required: true
+  jira-api-token:
+    description: Atlassian API token
+    required: true
+  issue-key:
+    description: Jira issue key receiving the comment
+    required: true
+  comment:
+    description: Plain-text comment to add
+    required: true
+
+outputs:
+  comment-id:
+    description: ID assigned to the new Jira comment
+    value: ${{ steps.comment.outputs.comment-id }}
+
+runs:
+  steps:
+    - id: comment
+      name: Add Jira comment
+      uses: docker://alpine:3.20
+      shell: sh
+      env:
+        JIRA_URL: ${{ inputs.jira-url }}
+        JIRA_EMAIL: ${{ inputs.jira-email }}
+        JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+        ISSUE_KEY: ${{ inputs.issue-key }}
+        COMMENT_TEXT: ${{ inputs.comment }}
+      run: |
+        set -eu
+
+        apk add --no-cache curl jq >/dev/null
+
+        : "${JIRA_URL:?jira-url is required}"
+        : "${JIRA_EMAIL:?jira-email is required}"
+        : "${JIRA_API_TOKEN:?jira-api-token is required}"
+        : "${ISSUE_KEY:?issue-key is required}"
+        : "${COMMENT_TEXT:?comment is required}"
+
+        JIRA_URL="${JIRA_URL%/}"
+
+        jq -n --arg comment "${COMMENT_TEXT}" '{
+          body: {
+            type: "doc",
+            version: 1,
+            content: [
+              {
+                type: "paragraph",
+                content: [{type: "text", text: $comment}]
+              }
+            ]
+          }
+        }' > /tmp/comment.json
+
+        HTTP_CODE=$(curl --silent --show-error \
+          --output /tmp/comment-response.json \
+          --write-out '%{http_code}' \
+          --user "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json" \
+          --header "Content-Type: application/json" \
+          --request POST \
+          --data @/tmp/comment.json \
+          "${JIRA_URL}/rest/api/3/issue/${ISSUE_KEY}/comment")
+
+        echo "Jira comment response: HTTP ${HTTP_CODE}"
+
+        if [ "${HTTP_CODE}" != "201" ]; then
+          echo "Jira rejected the comment request:"
+          jq . /tmp/comment-response.json 2>/dev/null || cat /tmp/comment-response.json
+          exit 1
+        fi
+
+        jq -r '.id // empty' /tmp/comment-response.json > "${CLOUDBEES_OUTPUTS}/comment-id"
+        echo "Comment added to ${ISSUE_KEY}."
+
