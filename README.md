@@ -1,4 +1,4 @@
-# ADP Jira Add Comment Action
+# Jira Add Comment Action
 
 Adds a plain-text comment to a Jira Cloud issue. The action converts the text to Atlassian Document Format before calling Jira.
 
