@@ -7,7 +7,7 @@ Adds a plain-text comment to a Jira Cloud issue. The action converts the text to
 ```yaml
 - name: Add workflow traceability
   id: add-comment
-  uses: https://bitbucket.org/adp-uat/adp-jira-add-comment@v1.0.0
+  uses: https://github.com/shozab-unify-examples)jira-add-comment@v1.0.0
   with:
     jira-url: https://adp-uat.atlassian.net
     jira-email: ${{ secrets.JIRA_EMAIL }}
